@@ -49,3 +49,23 @@ c. [dongyh2021@mails.jlu.edu.cn](mailto:dongyh2021@mails.jlu.edu.cn)   d. Jin_Ch
 #### **Introduction:**
 
 In ancient Greek mythology, the three Fates governed the threads of life, weaving, measuring, and ultimately determining each person's destiny. Similarly, proteins, as the core executors of life’s processes, function through an intricate "web of fate," where sequence, structure, and function are intertwined. Traditional research methods, however, often focus on one-dimensional information, such as sequence or three-dimensional structure, limiting the understanding of these multifaceted relationships. To overcome this limitation, we propose an innovative interdisciplinary approach that translates protein sequence and structural information into musical encoding, enabling deeper exploration of the multidimensional functional relationships through spectral analysis. This method provides a novel perspective on dynamic information that is often elusive to conventional approaches, revealing profound patterns between protein function and structure.In our experiments, we utilized machine learning models such as multilayer perceptrons and XGBoost to analyze the musical spectra mapped from over 2,000 proteins, achieving a classification accuracy of 91.04% and a cross-validation score as high as 99.68%. Furthermore, the proposed harmony index in music encoding shows a significant correlation with protein functionality, such as enzymatic activity. This study offers new theoretical insights and inspiration for directed evolution and protein design, weaving, like the Fates, a symphony of life.
+
+![**Schematic Diagram of the Mapping Rules**](/image/1.png)
+
+<center>Figure 1. Schematic Diagram of the Mapping Rules</center>
+
+![Schematic Diagram of Spectrum Analysis](image\2.png)
+
+<center>Figure 2: Schematic Diagram of Spectrum Analysis</center>
+
+![Protein Function Prediction Flowchart](\image\3.jpg)
+
+<center>Figure 3. Protein Function Prediction Flowchart</center>
+
+![Classification confusion matrix for the 9 protein classes](\image\4.png)
+
+<center>Figure 5. Classification confusion matrix for the 9 protein classes</center>
+
+![Classification Prediction Model Learning Curve](\image\5.png)
+
+<center>**Figure 6. Classification Prediction Model Learning Curve**</center>
