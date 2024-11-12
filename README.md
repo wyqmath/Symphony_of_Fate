@@ -54,18 +54,18 @@ In ancient Greek mythology, the three Fates governed the threads of life, weavin
 
 <center>Figure 1. Schematic Diagram of the Mapping Rules</center>
 
-![Schematic Diagram of Spectrum Analysis](image\2.png)
+![Schematic Diagram of Spectrum Analysis](image/2.png)
 
 <center>Figure 2: Schematic Diagram of Spectrum Analysis</center>
 
-![Protein Function Prediction Flowchart](\image\3.jpg)
+![Protein Function Prediction Flowchart](image/3.jpg)
 
 <center>Figure 3. Protein Function Prediction Flowchart</center>
 
-![Classification confusion matrix for the 9 protein classes](\image\4.png)
+![Classification confusion matrix for the 9 protein classes](image/4.png)
 
 <center>Figure 5. Classification confusion matrix for the 9 protein classes</center>
 
-![Classification Prediction Model Learning Curve](\image\5.png)
+![Classification Prediction Model Learning Curve](image/5.png)
 
-<center>**Figure 6. Classification Prediction Model Learning Curve**</center>
+<center>Figure 6. Classification Prediction Model Learning Curve</center>
