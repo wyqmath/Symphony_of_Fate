@@ -1,24 +1,5 @@
 # **Symphony of Fate: Weaving Life through the Music of Amino Acids**
 
-Author: 
-Xu Wang<sup>1, 3, a*</sup>, Yiquan Wang<sup>2, 3, b</sup>, Yuhua Dong<sup>1, c</sup>, Chen Jin<sup>4, d</sup>
-
- 
-
-1. College of Communication Engineering, Jilin University, Changchun, Jilin, 130000, China 
-
-2. College of Mathematics and System Science, Xinjiang University, Urumqi, Xinjiang, 830046, China
-
-3. Shenzhen X-Institute, Shenzhen, China, 518055
-
-4. College of Animal Science and Technology, Anhui Agricultural University, Hefei, Anhui, 230046, China
-
- 
-
-a. [wangxu2020@mails.jlu.edu.cn](mailto:wangxu2020@mails.jlu.edu.cn)   b. ethan@stu.xju.edu.cn
-
-c. [dongyh2021@mails.jlu.edu.cn](mailto:dongyh2021@mails.jlu.edu.cn)   d. Jin_Chen_31@stu.ahau.edu.cn
-
 ## Dataset Source：
 
 | **Types of Materials**  | **Sources**       | **URLs**                      |
