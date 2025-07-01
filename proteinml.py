@@ -166,7 +166,7 @@ if __name__ == "__main__":
         solver='adam',              # 优化算法
         max_iter=2000,               # 最大迭代次数
         random_state=42,
-        alpha=0.001
+        alpha=0.05
     )
 
     # 创建投票分类器，使用调优后的模型
