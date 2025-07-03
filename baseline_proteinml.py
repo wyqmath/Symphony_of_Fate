@@ -19,9 +19,9 @@ from collections import Counter
 from tqdm import tqdm
 
 # --- Matplotlib Configuration ---
-# Use a backend that doesn't require a GUI and can save files
+# 使用一个不需要GUI并且可以保存文件的后端
 matplotlib.use('Agg')
-# Use a default, available font to prevent 'findfont' errors.
+# 使用一个默认的、可用的字体来防止 'findfont' 错误
 matplotlib.rcParams['axes.unicode_minus'] = False
 matplotlib.rcParams['font.size'] = 12
 matplotlib.rcParams['axes.labelsize'] = 14
@@ -30,14 +30,14 @@ matplotlib.rcParams['ytick.labelsize'] = 12
 
 # --- Class Names ---
 CLASS_NAMES = [
-    'Enzyme', 'Structural Proteins', 'Transport Proteins', 'Storage Proteins',
-    'Signalling Proteins', 'Receptor Proteins', 'Gene Regulatory Proteins',
-    'Immune Proteins', 'Motor Proteins'
+    'Enzyme', 'Structural', 'Transport', 'Storage',
+    'Signalling', 'Receptor', 'Gene Regulatory',
+    'Immune', 'Chaperone'
 ]
 
 # --- Data Directories ---
-# This script assumes it is run from a root directory that contains
-# 'train_image', 'test_image', and 'fasta' as subdirectories.
+# 此脚本假定从一个根目录运行，该根目录包含
+# 'train_image', 'test_image', 和 'fasta' 作为子目录。
 spectrogram_train_dir = 'train_image'
 spectrogram_test_dir = 'test_image'
 fasta_train_dir = os.path.join('fasta', 'train')
@@ -49,20 +49,26 @@ fasta_test_dir = os.path.join('fasta', 'test')
 # ==============================================================================
 
 def data_augmentation(img):
+    """对单个图像进行数据增强。"""
     augmented_images = [img]
+    # 添加高斯噪声
     noise = np.random.normal(0.0001, 0.005, img.shape)
     augmented_images.append(np.clip(img + noise, 0, 1))
+    # 水平翻转
     augmented_images.append(np.fliplr(img))
+    # 调整对比度和亮度
     contrast_adjusted = img * random.uniform(0.8, 1.2)
     brightness_adjusted = contrast_adjusted + random.uniform(-0.05, 0.05)
     augmented_images.append(np.clip(brightness_adjusted, 0, 1))
     return augmented_images
 
 def extract_features_from_spectrogram(spectrogram):
-    mfccs = librosa.feature.mfcc(S=librosa.db_to_power(spectrogram), sr=22050, n_mfcc=100)
+    """从频谱图中提取MFCC特征。"""
+    mfccs = librosa.feature.mfcc(S=librosa.db_to_power(spectrogram), sr=22050, n_mfcc=60)
     return np.mean(mfccs, axis=1)
 
 def process_image_for_music_encoding(img_path, label, augment=False):
+    """处理单个图像文件以进行音乐编码特征提取。"""
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     if img is not None:
         img = img / 255.0
@@ -72,6 +78,7 @@ def process_image_for_music_encoding(img_path, label, augment=False):
     return None
 
 def load_music_encoding_features(folder, augment=False):
+    """从包含频谱图图像的文件夹中加载音乐编码特征。"""
     features, labels = [], []
     aug_status = "with augmentation" if augment else "without augmentation"
     print(f"Loading music encoding features from {folder} {aug_status}...")
@@ -81,6 +88,11 @@ def load_music_encoding_features(folder, augment=False):
             print(f"Warning: Directory not found: {folder}")
             return np.array(features), np.array(labels)
         for label_folder in os.listdir(folder):
+            # --- 新增修改：跳过 .ipynb_checkpoints 文件夹 ---
+            if label_folder == '.ipynb_checkpoints':
+                print(f"Skipping ipynb_checkpoints directory: {os.path.join(folder, label_folder)}")
+                continue
+            # --- 修改结束 ---
             label_path = os.path.join(folder, label_folder)
             if os.path.isdir(label_path):
                 for filename in os.listdir(label_path):
@@ -130,6 +142,7 @@ BLOSUM62 = {
 }
 
 def _load_sequences_with_limit(fasta_dir, limit_per_file):
+    """从FASTA目录加载序列，每个文件有序列数量限制。"""
     sequences, labels = [], []
     print(f"Reading FASTA files from: {fasta_dir} (limit: {limit_per_file} sequences per file)")
     if not os.path.exists(fasta_dir):
@@ -138,6 +151,11 @@ def _load_sequences_with_limit(fasta_dir, limit_per_file):
     
     file_list = os.listdir(fasta_dir)
     for filename in tqdm(file_list, desc=f"Reading files from {os.path.basename(fasta_dir)}"):
+        # --- 新增修改：跳过 .ipynb_checkpoints 文件夹 ---
+        if filename == '.ipynb_checkpoints':
+            print(f"Skipping ipynb_checkpoints directory: {os.path.join(fasta_dir, filename)}")
+            continue
+        # --- 修改结束 ---
         if not filename.endswith(('.fasta', '.fa')):
             continue
         try:
@@ -160,16 +178,17 @@ def _load_sequences_with_limit(fasta_dir, limit_per_file):
     return sequences, labels
 
 def _process_sequences_to_features(sequences, max_len, apply_noise=False, noise_level=0.05):
+    """将序列转换为FFT特征。"""
     features = []
     for seq in tqdm(sequences, desc="Generating FFT features", leave=False):
         hydro_signal = np.array([KYTE_DOOLITTLE.get(aa, 0) for aa in seq])
         if apply_noise:
             noise = np.random.normal(0, noise_level, hydro_signal.shape)
             hydro_signal += noise
-        # Truncate sequences that are longer than max_len
+        # 截断长于max_len的序列
         if len(hydro_signal) > max_len:
             hydro_signal = hydro_signal[:max_len]
-        # Pad sequences that are shorter than max_len
+        # 填充短于max_len的序列
         padded_signal = np.pad(hydro_signal, (0, max_len - len(hydro_signal)), 'constant')
         fft_result = np.fft.fft(padded_signal)
         power_spectrum = np.abs(fft_result)**2
@@ -177,6 +196,7 @@ def _process_sequences_to_features(sequences, max_len, apply_noise=False, noise_
     return np.array(features)
 
 def _conservative_mutation(sequence, num_mutations=2):
+    """对序列进行保守突变。"""
     seq_list = list(sequence)
     possible_indices = list(range(len(seq_list)))
     random.shuffle(possible_indices)
@@ -192,6 +212,7 @@ def _conservative_mutation(sequence, num_mutations=2):
     return "".join(seq_list)
 
 def _random_cropping(sequence, crop_ratio=0.9):
+    """对序列进行随机裁剪。"""
     original_len = len(sequence)
     crop_len = int(original_len * crop_ratio)
     if crop_len >= original_len: return sequence
@@ -199,6 +220,7 @@ def _random_cropping(sequence, crop_ratio=0.9):
     return sequence[start_index : start_index + crop_len]
 
 def load_fasta_features_with_augmentation(train_dir, test_dir):
+    """加载并从FASTA文件提取增强特征。"""
     print("\nLoading and extracting ENHANCED features from FASTA files...")
     train_seqs, y_train_orig = _load_sequences_with_limit(train_dir, limit_per_file=800)
     test_seqs, y_test = _load_sequences_with_limit(test_dir, limit_per_file=200)
@@ -220,11 +242,6 @@ def load_fasta_features_with_augmentation(train_dir, test_dir):
         aug_train_labels.append(label)
     print(f"Original training sequences: {len(train_seqs)}. Augmented training sequences: {len(aug_train_seqs)}.")
 
-    # ==========================================================================
-    # FIX: DATA LEAKAGE CORRECTION
-    # Calculate max_len ONLY from the training data to prevent data leakage.
-    # The test set must be treated as unseen data.
-    # ==========================================================================
     max_len = max(len(s) for s in aug_train_seqs) if aug_train_seqs else 0
     if max_len == 0:
         print("Error: max_len is 0, cannot process features. Aborting FASTA experiment.")
@@ -233,7 +250,6 @@ def load_fasta_features_with_augmentation(train_dir, test_dir):
     print(f"Max protein length from AUGMENTED TRAINING data: {max_len}.")
     print("All train and test sequences will be padded or truncated to this length.")
 
-    # Process both train and test sets using the same max_len derived from training data.
     X_train = _process_sequences_to_features(aug_train_seqs, max_len, apply_noise=True)
     X_test = _process_sequences_to_features(test_seqs, max_len, apply_noise=False)
     
@@ -244,6 +260,7 @@ def load_fasta_features_with_augmentation(train_dir, test_dir):
 # ==============================================================================
 
 def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_labels, confusion_matrix_cmap):
+    """运行统一的机器学习流程。"""
     print("\n" + "="*80)
     print(f"RUNNING PIPELINE FOR: {experiment_name}")
     print("="*80)
@@ -255,19 +272,20 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
         print("Test data is empty. Skipping pipeline.")
         return
 
-    # --- Two-Step Feature Selection ---
+    # --- 两步特征选择 ---
     print("\n--- Running Two-Step Feature Selection ---")
     print(f"Initial number of features: {X_train.shape[1]}")
 
-    # Step 1: SelectFromModel for broad reduction
+    # 步骤 1: 使用SelectFromModel进行粗略筛选
     print("Step 1: Applying SelectFromModel for broad feature reduction...")
     sfm_estimator = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-    sfm = SelectFromModel(sfm_estimator, threshold="median", prefit=False)
+    # 修改：降低阈值以保留更多特征
+    sfm = SelectFromModel(sfm_estimator, threshold="0.25*median", prefit=False)
     X_train_sfm = sfm.fit_transform(X_train, y_train)
     X_test_sfm = sfm.transform(X_test)
     print(f"Features after SelectFromModel: {X_train_sfm.shape[1]}")
 
-    # Step 2: RFE for fine-grained selection on the reduced set
+    # 步骤 2: 在筛选后的特征集上使用RFE进行精细选择
     print("Step 2: Applying RFE for fine-grained feature selection...")
     if X_train_sfm.shape[1] <= 1:
         print("Not enough features for RFE. Using features from SelectFromModel.")
@@ -286,23 +304,30 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
     print(f"Training data shape after feature selection: {X_train_rfe.shape}")
     print(f"Test data shape after feature selection: {X_test_rfe.shape}")
 
-    # --- Define Untrained Base Models for the Ensemble ---
-    rf_clf = RandomForestClassifier(n_estimators=1000, max_depth=10, min_samples_split=10, random_state=42, n_jobs=-1)
-    xgb_clf = XGBClassifier(n_estimators=1000, learning_rate=0.01, max_depth=6, reg_lambda=1, alpha=0.01, random_state=42, eval_metric='mlogloss', tree_method='hist', device='cuda')
-    svm_clf = SVC(kernel='rbf', C=0.01, probability=True, random_state=42)
-    mlp_clf = MLPClassifier(hidden_layer_sizes=(64, 32), activation='relu', solver='adam', max_iter=2000, random_state=42, alpha=0.05, early_stopping=True)
+    # --- 定义用于集成的未训练基础模型 (优化参数) ---
+    # 修改：移除max_depth并降低min_samples_split以创建更深、更详细的树
+    rf_clf = RandomForestClassifier(n_estimators=1000, max_depth=None, min_samples_split=2, random_state=42, n_jobs=-1)
+    
+    # 修改：增加学习率以加快学习速度，并减少正则化 (lambda/alpha)
+    xgb_clf = XGBClassifier(n_estimators=1000, learning_rate=0.05, max_depth=6, reg_lambda=0.5, alpha=0, random_state=42, eval_metric='mlogloss', tree_method='hist', device='cuda')
+    
+    # 修改：显著增加C以减少正则化，允许更复杂的决策边界
+    svm_clf = SVC(kernel='rbf', C=10, probability=True, random_state=42)
+    
+    # 修改：增加神经元数量以增强模型容量
+    mlp_clf = MLPClassifier(hidden_layer_sizes=(128, 64), activation='relu', solver='adam', max_iter=2000, random_state=42, alpha=0.05, early_stopping=True)
 
-    # --- Create the Ensemble Model (Voting Classifier) ---
+    # --- 创建集成模型 (投票分类器) ---
     voting_clf = VotingClassifier(
         estimators=[('rf', rf_clf), ('xgb', xgb_clf), ('svm', svm_clf), ('mlp', mlp_clf)],
-        voting='soft', weights=[1, 1, 1, 1], n_jobs=-1
+        voting='soft', weights=[1, 1.5, 1, 1], n_jobs=-1 # 稍微增加强大的XGBoost模型的权重
     )
 
-    # --- Perform Cross-Validation ---
+    # --- 执行交叉验证 ---
     print("\n--- Evaluating ENSEMBLE model with Cross-Validation ---")
     skf_eval = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
-    # n_jobs=1 is used here to avoid nested parallelism issues.
+    # 此处使用 n_jobs=1 以避免嵌套并行问题
     cv_scores = cross_val_score(voting_clf, X_train_rfe, y_train, cv=skf_eval, scoring='accuracy', n_jobs=1)
     
     cv_mean = np.mean(cv_scores)
@@ -310,7 +335,7 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
     print(f"Ensemble Cross-Validation Accuracy: {cv_mean:.4f} (+/- {cv_std * 2:.4f})")
     print("(This is a realistic estimate of the model's performance on unseen data)")
 
-    # --- Train the Final Ensemble Model ---
+    # --- 训练最终的集成模型 ---
     print('\n--- Training final ENSEMBLE model on the full training set... ---')
     print(f"Class distribution for final training: {Counter(y_train)}")
     start_time = time.time()
@@ -318,7 +343,7 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
     train_time = time.time() - start_time
     print(f"Final ensemble training completed in {train_time:.2f} seconds.")
     
-    # --- Evaluate the Final Model on the Test Set ---
+    # --- 在测试集上评估最终模型 ---
     print('\n--- Evaluating final ENSEMBLE model on the test set... ---')
     y_pred = voting_clf.predict(X_test_rfe)
     accuracy = accuracy_score(y_test, y_pred)
@@ -332,7 +357,7 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
     report_target_names = [class_labels[i] for i in report_labels]
     print(classification_report(y_test, y_pred, labels=report_labels, target_names=report_target_names, zero_division=0))
 
-    # --- Plot and Save the Confusion Matrix ---
+    # --- 绘制并保存混淆矩阵 ---
     print('Plotting and saving Confusion Matrix for ENSEMBLE model...')
     cm_labels = np.unique(np.concatenate((y_test, y_pred)))
     cm_display_labels = [class_labels[i] for i in cm_labels]
@@ -343,10 +368,10 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
     disp.plot(cmap=confusion_matrix_cmap, values_format='d', ax=ax, xticks_rotation='vertical')
     
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-    ax.set_title(f'Confusion Matrix (Ensemble - {experiment_name})', fontsize=16, pad=20)
+    ax.set_title(f'Confusion Matrix ({experiment_name})', fontsize=16, pad=20)
     fig.tight_layout()
     
-    filename = f"Confusion_Matrix_Ensemble_{experiment_name.replace(' ', '_')}.png"
+    filename = f"Confusion_Matrix_{experiment_name.replace(' ', '_')}_Optimized.png"
     fig.savefig(filename, bbox_inches='tight', dpi=300)
     print(f"Saved confusion matrix plot to: {filename}")
     plt.close(fig)
@@ -356,24 +381,24 @@ def run_ml_pipeline(X_train, y_train, X_test, y_test, experiment_name, class_lab
 # ==============================================================================
 
 if __name__ == "__main__":
-    # --- EXPERIMENT 1: Music Encoding ---
+    # --- 实验 1: 音乐编码 ---
     X_train_music, y_train_music = load_music_encoding_features(spectrogram_train_dir, augment=True)
     X_test_music, y_test_music = load_music_encoding_features(spectrogram_test_dir, augment=False)
     
     if X_train_music.size > 0 and y_train_music.size > 0:
         run_ml_pipeline(X_train_music, y_train_music, X_test_music, y_test_music, 
-                        "Music Encoding", 
+                        "MFCC_ML", 
                         CLASS_NAMES,
                         confusion_matrix_cmap='Blues')
     else:
         print("Could not load data for the Music Encoding experiment. Skipping.")
 
-    # --- EXPERIMENT 2: FASTA Method ---
+    # --- 实验 2: FASTA 方法 ---
     X_train_aug, y_train_aug, X_test_aug, y_test_aug = load_fasta_features_with_augmentation(fasta_train_dir, fasta_test_dir)
 
     if X_train_aug.size > 0 and y_train_aug.size > 0:
         run_ml_pipeline(X_train_aug, y_train_aug, X_test_aug, y_test_aug, 
-                        "FASTA", 
+                        "FASTA_ML", 
                         CLASS_NAMES,
                         confusion_matrix_cmap='Purples')
     else:
