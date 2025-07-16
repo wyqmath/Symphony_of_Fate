@@ -1,4 +1,4 @@
-# **Symphony of Fate: Weaving Life through the Music of Amino Acids**
+# **From Signal to Symphony: Predicting Protein Function with a Deep Learning Fusion Model on Sonified Sequences**
 
 ## Dataset Source：
 
@@ -11,43 +11,25 @@
 
 ## 1. ftow.py
 
-**Function**: Converts amino acid FASTA sequences to WAV audio files and PNG spectrograms.
+**Function**: Converts amino acid FASTA sequences into MIDI files, then to WAV audio files, and finally generates spectrogram images from the audio.
 
-## 2. proteinml.py
+## 2. baseline_ml.py
 
-**Function**: Machine learning for predicting protein functions and plotting learning curves.
+**Function**: Implements baseline machine learning models. It can extract features from protein sequences (via FFT on hydrophobicity) or from spectrograms (via mean MFCCs) and train models like RandomForest and XGBoost.
 
-## 3. proteinml_matrix.py
+## 3. baseline_dl.py
 
-**Function**: Machine learning for predicting protein functions and plotting confusion matrices.
+**Function**: Implements a deep learning fusion model. It uses a pre-trained CNN (e.g., ConvNeXt) for visual features from spectrograms and fuses them with mean MFCC features using an attention mechanism.
 
-## 4. Tonnetz.py
+## 4. dlforcare.py
 
-**Function**: Calculates Tonnetz features and Pearson correlation coefficients.
+**Function**: Implements an advanced, two-phase deep learning pipeline. It treats MFCCs as a time series, processing them with a GRU and an audio attention layer, then fuses these advanced audio features with CNN-based visual features for a more sophisticated classification.
 
+## 5. Tonnetz.py
 
+**Function**: Extracts Tonnetz features from WAV files and calculates the Pearson correlation coefficient against kinetic parameters (e.g., kcat/km) to analyze the relationship between musical harmony and protein function.
 
 #### **Introduction:**
 
-In ancient Greek mythology, the three Fates governed the threads of life, weaving, measuring, and ultimately determining each person's destiny. Similarly, proteins, as the core executors of life’s processes, function through an intricate "web of fate," where sequence, structure, and function are intertwined. Traditional research methods, however, often focus on one-dimensional information, such as sequence or three-dimensional structure, limiting the understanding of these multifaceted relationships. To overcome this limitation, we propose an innovative interdisciplinary approach that translates protein sequence and structural information into musical encoding, enabling deeper exploration of the multidimensional functional relationships through spectral analysis. This method provides a novel perspective on dynamic information that is often elusive to conventional approaches, revealing profound patterns between protein function and structure.In our experiments, we utilized machine learning models such as multilayer perceptrons and XGBoost to analyze the musical spectra mapped from over 2,000 proteins, achieving a classification accuracy of 91.04% and a cross-validation score as high as 99.68%. Furthermore, the proposed harmony index in music encoding shows a significant correlation with protein functionality, such as enzymatic activity. This study offers new theoretical insights and inspiration for directed evolution and protein design, weaving, like the Fates, a symphony of life.
-
-![**Schematic Diagram of the Mapping Rules**](/image/1.png)
-
-**Figure 1. Schematic Diagram of the Mapping Rules**
-
-![Schematic Diagram of Spectrum Analysis](image/2.png)
-
-**Figure 2: Schematic Diagram of Spectrum Analysis**
-
-![Protein Function Prediction Flowchart](image/3.jpg)
-
-**Figure 3. Protein Function Prediction Flowchart**
-
-![Classification confusion matrix for the 9 protein classes](image/4.png)
-
-**Figure 5. Classification confusion matrix for the 9 protein classes**
-
-![Classification Prediction Model Learning Curve](image/5.png)
-
-**Figure 6. Classification Prediction Model Learning Curve**
+Proteins are fundamental to life, with their function determined by a complex interplay of sequence and structure. Predicting function from sequence remains a central challenge. This study introduces a systematic, multi-stage approach that demonstrates the power of evolving both data representation and model complexity for protein function classification. We curated a dataset of nine protein classes and first established a baseline using a Fast Fourier Transform (FFT) on 1D hydrophobicity profiles, achieving a modest accuracy of 75.28%. We then advanced the representation by translating protein information into 2D spectrograms via musical sonification, which, when combined with engineered Mel-Frequency Cepstral Coefficient (MFCC) features, significantly improved accuracy to 81.17%. Finally, an end-to-end deep learning model fusing pre-trained ConvNeXt visual features with MFCCs via an attention mechanism achieved a high accuracy of 90.44%, establishing a new state-of-the-art for audio-based protein function classification. The ultimate validation of our encoding, however, is its application in generative design. We demonstrate that the learned 'musical features' are not just correlational but have enough predictive power to guide protein engineering. By integrating our framework into a conditional diffusion model, we successfully generated novel, viable Green Fluorescent Protein (GFP) variants, showcasing its utility as a powerful tool for both protein analysis and design.
 
