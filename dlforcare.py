@@ -19,51 +19,38 @@ import timm
 from torch.nn.utils.rnn import pad_sequence
 
 # ==============================================================================
-# SECTION 0: CONFIGURATION (Preserved from your script)
+# SECTION 0: CONFIGURATION
 # ==============================================================================
-# --- Matplotlib Configuration ---
 matplotlib.use('Agg')
-matplotlib.rcParams['axes.unicode_minus'] = False
-matplotlib.rcParams['font.family'] = ['sans-serif']
-matplotlib.rcParams['font.size'] = 12
-matplotlib.rcParams['axes.labelsize'] = 14
-matplotlib.rcParams['xtick.labelsize'] = 12
-matplotlib.rcParams['ytick.labelsize'] = 12
-
-# --- Constants and Global Config (Preserved from your script) ---
-CLASS_NAMES = [
-    'Enzyme', 'Structural', 'Transport', 'Storage',
-    'Signalling', 'Receptor', 'Gene Regulatory',
-    'Immune', 'Chaperone'
-]
-NUM_CLASSES = len(CLASS_NAMES)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
 
-# --- Data Directories (Preserved from your script) ---
-spectrogram_train_dir = 'train_image'
-spectrogram_test_dir = 'test_image'
-
-# --- Model and Training Parameters (Adapted from script 1) ---
+# --- Core Parameters ---
+DATA_DIR = 'enzyme_output/image'
 MODEL_HUB_ID = 'convnext_base.fb_in22k'
 N_MFCC = 60
-BATCH_SIZE = 16 # Adjusted based on your original script's dataloader
+BATCH_SIZE = 32
 NUM_WORKERS = 4
+
+# --- File Paths ---
 IMAGE_MODEL_WEIGHTS_PATH = 'best_ConvNeXt_ImageOnly_Baseline.pth'
 FINAL_MODEL_FILENAME_TAG = 'ConvNeXt_Fusion_AudioAttention'
 
 
 # ==============================================================================
-# SECTION 1: DATA LOADING & UTILITIES (Upgraded to handle sequences)
+# SECTION 1: DATA LOADING & UTILITIES
 # ==============================================================================
 def extract_mfcc_sequence(spectrogram_np):
-    """Extracts a sequence of MFCCs from a spectrogram image."""
+    """Extracts MFCCs from a spectrogram image."""
     power_spectrogram = np.abs(spectrogram_np.astype(float))**2
     mfccs = librosa.feature.mfcc(S=power_spectrogram, sr=22050, n_mfcc=N_MFCC)
-    return mfccs.T # Transpose to get (time_steps, n_mfcc)
+    return mfccs.T
 
 class SpectrogramDataset(Dataset):
-    """Dataset to load spectrogram images and extract MFCC sequences."""
+    """
+    Dataset for loading spectrogram images and extracting MFCCs.
+    Note: For Phase 1, the MFCCs will be generated but ignored.
+    """
     def __init__(self, file_paths, labels, transform=None):
         self.file_paths = file_paths
         self.labels = labels
@@ -78,7 +65,6 @@ class SpectrogramDataset(Dataset):
         if image_np is None:
             raise FileNotFoundError(f"Could not read image: {img_path}")
         
-        # KEY CHANGE: Extract the full MFCC sequence
         mfcc_sequence = extract_mfcc_sequence(image_np)
         label = self.labels[idx]
         
@@ -92,7 +78,7 @@ class SpectrogramDataset(Dataset):
         return image_tensor, mfcc_tensor, label
 
 def collate_mfcc(batch):
-    """Pads MFCC sequences to the same length in a batch for RNN processing."""
+    """Pads MFCC sequences to the same length in a batch."""
     images, mfccs, labels = zip(*batch)
     images = torch.stack(images, 0)
     labels = torch.tensor(labels)
@@ -123,7 +109,7 @@ class SpecAugment(nn.Module):
         return aug_spec
 
 # ==============================================================================
-# SECTION 2: MODEL ARCHITECTURES (Upgraded to two-phase models)
+# SECTION 2: MODEL ARCHITECTURES
 # ==============================================================================
 
 # --- Phase 1 Model ---
@@ -193,7 +179,7 @@ class AttentionFusionModel(nn.Module):
         return output
 
 # ==============================================================================
-# SECTION 3: TRAINING & EVALUATION FUNCTIONS (Upgraded for two-phase flow)
+# SECTION 3: TRAINING & EVALUATION FUNCTIONS
 # ==============================================================================
 
 def run_phase1_training(train_loader, val_loader, num_classes):
@@ -202,7 +188,12 @@ def run_phase1_training(train_loader, val_loader, num_classes):
     model = ImageOnlyModel(model_name=MODEL_HUB_ID, num_classes=num_classes, pretrained=True, drop_path_rate=0.2)
     model.to(DEVICE)
     
-    finetune_params = [p for p in model.backbone.parameters()]
+    # Freeze early layers
+    for name, param in model.backbone.named_parameters():
+        if name.startswith('stem') or name.startswith('stages.0') or name.startswith('stages.1'):
+            param.requires_grad = False
+            
+    finetune_params = [p for name, p in model.backbone.named_parameters() if p.requires_grad]
     head_params = list(model.classifier_head.parameters())
     param_groups = [{'params': finetune_params, 'lr': 1e-4}, {'params': head_params, 'lr': 1e-3}]
     optimizer = optim.AdamW(param_groups, weight_decay=1e-2)
@@ -216,7 +207,8 @@ def run_phase1_training(train_loader, val_loader, num_classes):
     for epoch in range(100):
         model.train()
         running_loss = 0.0
-        pbar = tqdm(train_loader, desc=f"Phase 1 - Epoch {epoch+1}/100 [Train]", leave=False)
+        pbar = tqdm(train_loader, desc=f"Phase 1 - Epoch {epoch+1}/{100} [Train]", leave=False)
+        # The dataloader returns three items, but we only need the image and label
         for images, _, labels in pbar:
             images, labels = images.to(DEVICE), labels.to(DEVICE)
             optimizer.zero_grad()
@@ -240,7 +232,7 @@ def run_phase1_training(train_loader, val_loader, num_classes):
         
         val_loss_epoch = val_loss / len(val_loader)
         current_lr = optimizer.param_groups[-1]['lr']
-        print(f"Phase 1 - Epoch {epoch+1}/100 | Train Loss: {train_loss_epoch:.4f} | Val Loss: {val_loss_epoch:.4f} | Head LR: {current_lr:.6f}")
+        print(f"Phase 1 - Epoch {epoch+1}/{100} | Train Loss: {train_loss_epoch:.4f} | Val Loss: {val_loss_epoch:.4f} | Head LR: {current_lr:.6f}")
         
         if scheduler: scheduler.step()
         
@@ -264,6 +256,7 @@ def run_phase2_training_and_eval(train_loader, val_loader, test_loader, class_la
     num_classes = len(class_labels)
     model = AttentionFusionModel(model_name=MODEL_HUB_ID, num_classes=num_classes, n_mfcc_features=N_MFCC)
     
+    # Load pre-trained backbone weights
     print(f"\nLoading pre-trained backbone weights from: {IMAGE_MODEL_WEIGHTS_PATH}")
     image_only_state_dict = torch.load(IMAGE_MODEL_WEIGHTS_PATH)
     backbone_weights = {k: v for k, v in image_only_state_dict.items() if k.startswith('backbone.')}
@@ -271,6 +264,7 @@ def run_phase2_training_and_eval(train_loader, val_loader, test_loader, class_la
     print("Successfully loaded backbone weights into the fusion model.")
     model.to(DEVICE)
 
+    # Optimizer for Two-Stage Training
     head_params = list(model.mfcc_gru.parameters()) + list(model.audio_attention.parameters()) + list(model.classifier_head.parameters())
     optimizer = optim.AdamW([{'params': head_params, 'lr': 1e-4}], weight_decay=1e-2)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-6)
@@ -296,7 +290,7 @@ def run_phase2_training_and_eval(train_loader, val_loader, test_loader, class_la
 
         model.train()
         running_loss = 0.0
-        pbar = tqdm(train_loader, desc=f"Phase 2 - Epoch {epoch+1}/100 [Train]", leave=False)
+        pbar = tqdm(train_loader, desc=f"Phase 2 - Epoch {epoch+1}/{100} [Train]", leave=False)
         for images, mfccs, labels in pbar:
             images, mfccs, labels = images.to(DEVICE), mfccs.to(DEVICE), labels.to(DEVICE)
             optimizer.zero_grad()
@@ -320,7 +314,7 @@ def run_phase2_training_and_eval(train_loader, val_loader, test_loader, class_la
         
         val_loss_epoch = val_loss / len(val_loader)
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"Phase 2 - Epoch {epoch+1}/100 | Train Loss: {train_loss_epoch:.4f} | Val Loss: {val_loss_epoch:.4f} | Head LR: {current_lr:.6f}")
+        print(f"Phase 2 - Epoch {epoch+1}/{100} | Train Loss: {train_loss_epoch:.4f} | Val Loss: {val_loss_epoch:.4f} | Head LR: {current_lr:.6f}")
         
         if scheduler: scheduler.step()
         
@@ -339,6 +333,7 @@ def run_phase2_training_and_eval(train_loader, val_loader, test_loader, class_la
     print(f"\nTraining complete. Loading best model weights (Val Loss: {best_val_loss:.4f})")
     model.load_state_dict(torch.load(model_save_path, map_location=DEVICE))
     
+    # --- Final Evaluation ---
     print(f"\n--- Running Final Evaluation for: {FINAL_MODEL_FILENAME_TAG} ---")
     model.eval()
     all_labels, all_preds = [], []
@@ -369,82 +364,53 @@ def run_phase2_training_and_eval(train_loader, val_loader, test_loader, class_la
 
 
 # ==============================================================================
-# SECTION 4: MAIN EXECUTION BLOCK (Adapted to your data structure)
+# SECTION 4: MAIN EXECUTION BLOCK
 # ==============================================================================
 if __name__ == "__main__":
-    # --- 1. Load Data using your specified directory structure ---
-    print(f"\n--- Using Pre-trained Model from Timm: {MODEL_HUB_ID} ---")
-    print("\n--- Loading file paths and labels from pre-split directories ---")
+    # --- Prepare Data ---
+    CLASS_NAMES = sorted([d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d)) and not d.startswith('.')])
+    NUM_CLASSES = len(CLASS_NAMES)
+    all_paths, all_labels = [], []
+    for class_name in CLASS_NAMES:
+        class_dir = os.path.join(DATA_DIR, class_name)
+        for filename in os.listdir(class_dir):
+            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                all_paths.append(os.path.join(class_dir, filename))
+                all_labels.append(CLASS_NAMES.index(class_name))
+                
+    train_val_paths, test_paths, train_val_labels, test_labels = train_test_split(all_paths, all_labels, test_size=0.20, random_state=42, stratify=all_labels)
+    train_paths, val_paths, train_labels, val_labels = train_test_split(train_val_paths, train_val_labels, test_size=0.25, random_state=42, stratify=train_val_labels)
+
+    data_config = timm.data.resolve_data_config({}, model=MODEL_HUB_ID)
+    input_size = data_config['input_size'][1]
+    norm_mean, norm_std = (sum(data_config['mean']) / 3,), (sum(data_config['std']) / 3,)
     
-    def get_paths_and_labels(folder):
-        paths, labels = [], []
-        if not os.path.exists(folder):
-            print(f"Error: Directory not found: {folder}")
-            return paths, labels
-        
-        for label_folder in sorted(os.listdir(folder)):
-            label_path = os.path.join(folder, label_folder)
-            if os.path.isdir(label_path) and label_folder.isdigit():
-                for filename in sorted(os.listdir(label_path)):
-                    full_path = os.path.join(label_path, filename)
-                    if os.path.isfile(full_path) and not filename.startswith('.'):
-                        paths.append(full_path)
-                        labels.append(int(label_folder) - 1)
-        return paths, labels
+    train_transform = transforms.Compose([
+        transforms.Resize((input_size, input_size)), transforms.RandomRotation(10),
+        transforms.RandomResizedCrop(input_size, scale=(0.9, 1.0)), transforms.ToTensor(),
+        SpecAugment(freq_mask_param=25, time_mask_param=50), transforms.Normalize(norm_mean, norm_std),
+        transforms.RandomErasing(p=0.25, scale=(0.02, 0.1))])
+    val_test_transform = transforms.Compose([
+        transforms.Resize((input_size, input_size)), transforms.ToTensor(), transforms.Normalize(norm_mean, norm_std)])
 
-    all_train_paths, all_train_labels = get_paths_and_labels(spectrogram_train_dir)
-    test_paths, test_labels = get_paths_and_labels(spectrogram_test_dir)
+    train_dataset = SpectrogramDataset(train_paths, train_labels, transform=train_transform)
+    val_dataset = SpectrogramDataset(val_paths, val_labels, transform=val_test_transform)
+    test_dataset = SpectrogramDataset(test_paths, test_labels, transform=val_test_transform)
 
-    if not all_train_paths or not test_paths:
-        print("Error: Training or testing images not found. Aborting.")
+    # --- Execute Training Pipeline ---
+    
+    # Step 1: Check for and run Phase 1 if necessary
+    if not os.path.exists(IMAGE_MODEL_WEIGHTS_PATH):
+        # For Phase 1, we don't need the collate function as MFCCs are ignored
+        phase1_train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
+        phase1_val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
+        run_phase1_training(phase1_train_loader, phase1_val_loader, NUM_CLASSES)
     else:
-        print(f"Found {len(all_train_paths)} total training images. Splitting into Train/Validation sets.")
-        train_paths, val_paths, train_labels, val_labels = train_test_split(
-            all_train_paths, all_train_labels, test_size=0.2, random_state=42, stratify=all_train_labels
-        )
-        print(f"--> New Train Set Size: {len(train_paths)}")
-        print(f"--> Validation Set Size: {len(val_paths)}")
-        print(f"Found {len(test_paths)} testing images.")
-        
-        # --- 2. Configure Data Transforms ---
-        print(f"\n--- Configuring data transforms for {MODEL_HUB_ID} ---")
-        data_config = timm.data.resolve_data_config({}, model=MODEL_HUB_ID)
-        input_size = data_config['input_size'][1]
-        norm_mean, norm_std = (sum(data_config['mean']) / 3,), (sum(data_config['std']) / 3,)
-        print(f"Input size: {input_size}x{input_size}, Mean: {norm_mean}, Std: {norm_std}")
+        print(f"Found existing baseline weights at '{IMAGE_MODEL_WEIGHTS_PATH}'. Skipping Phase 1 training.")
 
-        train_transform = transforms.Compose([
-            transforms.Resize((input_size, input_size)),
-            transforms.RandomRotation(15),
-            transforms.RandomResizedCrop(input_size, scale=(0.85, 1.0)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            SpecAugment(freq_mask_param=25, time_mask_param=50, num_freq_masks=2, num_time_masks=2),
-            transforms.Normalize(norm_mean, norm_std),
-            transforms.RandomErasing(p=0.25, scale=(0.02, 0.1), ratio=(0.3, 3.3), value='random')
-        ])
-        val_test_transform = transforms.Compose([
-            transforms.Resize((input_size, input_size)), transforms.ToTensor(), transforms.Normalize(norm_mean, norm_std)
-        ])
-
-        train_dataset = SpectrogramDataset(train_paths, train_labels, transform=train_transform)
-        val_dataset = SpectrogramDataset(val_paths, val_labels, transform=val_test_transform)
-        test_dataset = SpectrogramDataset(test_paths, test_labels, transform=val_test_transform)
-
-        # --- 3. Execute Two-Phase Training Pipeline ---
-        
-        # Step 1: Check for and run Phase 1 if necessary
-        if not os.path.exists(IMAGE_MODEL_WEIGHTS_PATH):
-            # For Phase 1, MFCCs are ignored, so no collate_fn is needed
-            phase1_train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
-            phase1_val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE*2, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
-            run_phase1_training(phase1_train_loader, phase1_val_loader, NUM_CLASSES)
-        else:
-            print(f"Found existing baseline weights at '{IMAGE_MODEL_WEIGHTS_PATH}'. Skipping Phase 1 training.")
-
-        # Step 2: Run Phase 2 using the baseline weights
-        # For Phase 2, collate_fn is required for MFCC padding
-        phase2_train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True, collate_fn=collate_mfcc)
-        phase2_val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE*2, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True, collate_fn=collate_mfcc)
-        phase2_test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE*2, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True, collate_fn=collate_mfcc)
-        run_phase2_training_and_eval(phase2_train_loader, phase2_val_loader, phase2_test_loader, CLASS_NAMES)
+    # Step 2: Run Phase 2 using the baseline weights
+    # For Phase 2, we need the collate function for MFCC padding
+    phase2_train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True, collate_fn=collate_mfcc)
+    phase2_val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True, collate_fn=collate_mfcc)
+    phase2_test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True, collate_fn=collate_mfcc)
+    run_phase2_training_and_eval(phase2_train_loader, phase2_val_loader, phase2_test_loader, CLASS_NAMES)
