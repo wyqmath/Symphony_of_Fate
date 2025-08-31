@@ -1,35 +1,47 @@
-# **From Signal to Symphony: Predicting Protein Function with a Deep Learning Fusion Model on Sonified Sequences**
+# From Signal to Symphony: Predicting Protein Function with a Deep Learning Fusion Model on Sonified Sequences
 
-## Dataset Source：
+## Project Structure
 
-| **Types of Materials**  | **Sources**       | **URLs**                      |
-| ----------------------- | ----------------- | ----------------------------- |
-| Protein FASTA Sequences | NCBI Database     | https://www.ncbi.nlm.nih.gov/ |
-|                         | UniProt Database  | https://www.uniprot.org/      |
-| Kcat and km             | SABIO-RK Database | http://sabio.h-its.org/       |
-|                         | EBI Database      | https://www.ebi.ac.uk/        |
+### 1. Core Models
 
-## 1. ftow.py
+These are the main deep learning models for protein function classification.
 
-**Function**: Converts amino acid FASTA sequences into MIDI files, then to WAV audio files, and finally generates spectrogram images from the audio.
+-   **`tiny.py`**: A fusion model for **9-class protein function prediction**. It uses a `ConvNeXt-Tiny` backbone to extract visual features from spectrograms and combines them with MFCC (Mel-Frequency Cepstral Coefficients) audio features using a gated attention mechanism.
+-   **`care_tiny.py`**: An advanced model for **7-class enzyme commission (EC) number prediction**. It employs a CRNN (Convolutional Recurrent Neural Network) architecture, processing MFCCs as a time series with a GRU layer before fusing them with visual features.
 
-## 2. baseline_ml.py
+### 2. Data Preprocessing & Sonification
 
-**Function**: Implements baseline machine learning models. It can extract features from protein sequences (via FFT on hydrophobicity) or from spectrograms (via mean MFCCs) and train models like RandomForest and XGBoost.
+Scripts responsible for converting FASTA protein sequences into spectrogram images.
 
-## 3. baseline_dl.py
+-   **`ftow.py`**: The primary script for converting FASTA files to WAV audio files and then to spectrograms.
+-   **`ftow_care.py` / `ftow_ours.py`**: Variants of the sonification script, likely tailored for the specific data used in the `care_tiny.py` and `tiny.py` models respectively.
+-   **`care_data/process_data.py`**: Script for processing raw data related to the enzyme classification task.
 
-**Function**: Implements a deep learning fusion model. It uses a pre-trained CNN (e.g., ConvNeXt) for visual features from spectrograms and fuses them with mean MFCC features using an attention mechanism.
+### 3. Baseline Models
 
-## 4. dlforcare.py
+The `baseline/` directory contains scripts for baseline machine learning and simpler deep learning models used for comparison.
 
-**Function**: Implements an advanced, two-phase deep learning pipeline. It treats MFCCs as a time series, processing them with a GRU and an audio attention layer, then fuses these advanced audio features with CNN-based visual features for a more sophisticated classification.
+-   `baseline/baseline_ml.py`: Implements traditional machine learning models (e.g., RandomForest, XGBoost).
+-   `baseline/baseline_dl.py`: A simpler deep learning fusion model.
+-   `baseline/1D_CNN.py`: A 1D CNN model that likely operates directly on sequence-derived data (e.g., hydrophobicity).
+-   `baseline/ESM.py`: Scripts related to using the ESM (Evolutionary Scale Modeling) protein language model.
 
-## 5. Tonnetz.py
+### 4. Specific Applications & Analysis
 
-**Function**: Extracts Tonnetz features from WAV files and calculates the Pearson correlation coefficient against kinetic parameters (e.g., kcat/km) to analyze the relationship between musical harmony and protein function.
+-   **`GFP/`**: Contains scripts for a generative task. This part of the project uses the learned features to guide the generation of novel Green Fluorescent Protein (GFP) variants.
+    -   `GFP/generate_data.py`: Generates data for the GFP task.
+    -   `GFP/GFP.py`: The main script for the GFP generation model.
+    -   `GFP/plddt.py`: Analyzes pLDDT scores (a measure of protein structure prediction confidence).
+-   **`Tonnetz.py`**: Extracts Tonnetz harmonic features from the generated audio files to analyze the relationship between musical harmony and protein biochemical properties.
+-   **`musicscoresplot/`**: Scripts for visualizing musical scores from protein data.
 
-#### **Introduction:**
+### 5. Utilities
 
-Proteins are fundamental to life, with their function determined by a complex interplay of sequence and structure. Predicting function from sequence remains a central challenge. This study introduces a systematic, multi-stage approach that demonstrates the power of evolving both data representation and model complexity for protein function classification. We curated a dataset of nine protein classes and first established a baseline using a Fast Fourier Transform (FFT) on 1D hydrophobicity profiles, achieving a modest accuracy of 75.28%. We then advanced the representation by translating protein information into 2D spectrograms via musical sonification, which, when combined with engineered Mel-Frequency Cepstral Coefficient (MFCC) features, significantly improved accuracy to 81.17%. Finally, an end-to-end deep learning model fusing pre-trained ConvNeXt visual features with MFCCs via an attention mechanism achieved a high accuracy of 90.44%, establishing a new state-of-the-art for audio-based protein function classification. The ultimate validation of our encoding, however, is its application in generative design. We demonstrate that the learned 'musical features' are not just correlational but have enough predictive power to guide protein engineering. By integrating our framework into a conditional diffusion model, we successfully generated novel, viable Green Fluorescent Protein (GFP) variants, showcasing its utility as a powerful tool for both protein analysis and design.
+-   **`misc/`**: A collection of utility scripts for tasks like counting sequences (`count_seq.py`, `count_fasta.py`).
+
+## Pre-trained Weights
+
+-   **9-Class Protein Function Model (`tiny.py`):**
+    You can download the pre-trained weights from the following link:
+    [Download Weights from Google Drive](https://drive.google.com/file/d/1rbiEnmT0AoNNHP-Ha8d7AKlhq_UMVT_-/view?usp=sharing)
 
